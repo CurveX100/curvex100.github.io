@@ -10,7 +10,7 @@
       html, body {width:100%; height:100%; margin:0;}
       canvas {position:absolute;top:0;left:0;right:0;bottom:0;margin:auto;}
     </style>
-    <script data-ad-client="ca-pub-7828280051508300" async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <script data-ad-client="pub-7828280051508300" async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
   </head>
   <body style="background:#222222;">
     <canvas id="game_canvas" style="border: 5px solid blue;"></canvas>
@@ -196,20 +196,50 @@
 
       var width = window.innerWidth-50;   // 25 pixel distance on each side
       var height = window.innerHeight-50; // -5px border -> 20px distance
-      var paused = false;         // True when paused (with RETURN)
+      var paused = true;         // True when paused (with RETURN)
       var stop_timer = 30 * 5;    // 30 FPS -> all 5 seconds stop with trailing
       var stop_length = 30 * 0.6; // stop trailing for 0.6 seconds
       var time = 0;               // for calculation if players are trailing
       var trailing = true;        // True if players roduce trail
       var items_activated = true; // Items can be in the game or not (switch with "1")
       var item_list = [];         // There are no items yet
-      var showed_alert = 0;       // show introduction once after three drawings
       const p1 = new Player(32, height/2, 0, "#CC0330");
       const p2 = new Player(width-32, height/2, 3.1415926, "#00DD00");
 
       function main_loop()
       {
-        if(paused) return;        // Pause and Unpause with RETURN
+        if(paused)
+        {
+          ctx.fillStyle = "rgb(50, 50,250)";   // draw msg border
+          ctx.fillRect((width-610)/2, (height-410)/2, 610, 410);
+          ctx.fillStyle = "rgb(40, 40, 40)";   // draw msg background
+          ctx.fillRect((width-600)/2, (height-400)/2, 600, 400);
+          ctx.font = "26px Arial bold";  // For the headings
+          ctx.fillStyle = "rgb(255, 3, 28)";  // red
+          ctx.fillText("Movement", (width-600)/2+10, (height-400)/2+30);
+          ctx.fillText("Items", (width-600)/2+10, (height-400)/2+170);
+          ctx.fillText("Contact", (width-600)/2+10, (height-400)/2+300);
+          ctx.font = "20px Arial";  // For the main text
+          ctx.fillStyle = "rgb(255, 255, 255)";  // white
+
+          var msg = "   Player 1: A, S         Player 2: ←, →";
+          ctx.fillText(msg, (width-600)/2+10, (height-400)/2+60);
+          msg = "   Pause: ↲                Items (on/off): 1";
+          ctx.fillText(msg, (width-600)/2+10, (height-400)/2+95);
+
+          msg = "   S: Speed         I: Invert movement          C: Change position";
+          ctx.fillText(msg, (width-600)/2+10, (height-400)/2+200);
+          msg = "   B: Brake          U: Unbreakable               ?: Mystery";
+          ctx.fillText(msg, (width-600)/2+10, (height-400)/2+235);
+
+          msg = "   CurveX100@gmail.com";
+          ctx.fillText(msg, (width-600)/2+10, (height-400)/2+330);
+
+          ctx.fillStyle = "rgb(255, 255, 0)";
+          msg = "Press ↲ to Unpause";
+          ctx.fillText(msg, (width-600)/2+410, (height-400)/2+385);
+          return;        // Pause and Unpause with RETURN
+        }
         time++;                   // Trailing is based on this counter
         add_items();              // Randomly add items
         p1.movement();            // Move Players
@@ -229,17 +259,6 @@
           p1.trail.push({x:-100, y:-100});  // push back values outside of game
           p2.trail.push({x:-100, y:-100});
         }
-
-        if(showed_alert<3)
-        {
-          showed_alert++;
-          if(showed_alert!=3) return;
-          alert("Welcome to Curve X! \n \nThis is a simple, local two player game" +
-                " inspired by classics like Curve fever." +
-                " To view the controls and items press Escape. \n \n" +
-                "For questions and comments please contact me at \n" +
-                "CurveX100@gmail.com");
-        }
       }
 
       function draw_everything()
@@ -253,7 +272,7 @@
         ctx.fillText(p2.points, width-250, 32);
         ctx.fillStyle = "rgb(100, 100, 100)";  // dark gray
         ctx.font = "20px Arial";
-        ctx.fillText("Press Esc for Info", 10, 25);
+        ctx.fillText("↲ Pause and Info", 10, 25);
 
         for(var i=0; i<item_list.length; i++) {item_list[i].draw();}
         p1.draw();
@@ -451,12 +470,6 @@
           case 49:        // "1" Key
             items_activated = !items_activated;
             item_list = [];
-            break;
-          case 27:      // Escape Key
-            alert("Movement\n------------\nPlayer 1: \t \tA, S\nPlayer 2: \t \t←, →\n" +
-                  "Pause: \t \t \t ↲\nItems (on/off): \t 1" +
-                  "\n\n\nItems\n------------\nS\tSpeed\nI\tInvert movement\nC\t" +
-                  "Change positions\nU\tUnbreakable\nB\tBreak\n?\tMystery");
             break;
         }
       }
