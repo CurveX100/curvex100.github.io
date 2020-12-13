@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="description" content="Curve X Free Game">
+    <meta name="keywords" content="Curve X, Game, 2D, Game, Competitive, Fun, Curve">
+    <meta name="author" content="Gregor D">
+    <title>Curve X</title>
+    <style>
+      html, body {width:100%; height:100%; margin:0;}
+      canvas {position:absolute;top:0;left:0;right:0;bottom:0;margin:auto;}
+    </style>
+  </head>
+  <body style="background:#222222;">
+    <canvas id="game_canvas" style="border: 5px solid blue;"></canvas>
+
+    <script>
+      window.onload = function()
+      {
+        canv = document.getElementById("game_canvas");
+        ctx = canv.getContext("2d");
+        ctx.canvas.width = window.innerWidth-50;
+        ctx.canvas.height = window.innerHeight-50;
+        document.addEventListener("keydown", keyDownHandler);
+        document.addEventListener("keyup", keyUpHandler);
+        setInterval(main_loop, 1000/30); // 30 = frames per second
+      }
+
+      class Player
+      {
+        constructor(x, y, direction, color)
+        {
+          this.start_x = x;             // these three variables are
+          this.start_y = y;             // necessary for the reset function
+          this.start_dir = direction;   // they are never changed
+          this.color = color;
+          this.x = this.start_x;        // Starting position
+          this.y = this.start_y;
+          this.direction = this.start_dir;   // Direction (0=right, pi=left)
+          this.ch_dir = 40;             // speed of directional change
+          this.speed = 4;
+          this.points = 0;
+          this.inverted = 0;            // >0 if movement is inverted by item
+          this.speedy = 0;              // >0 if speed is increased by item
+          this.brake = 0;               // >0 if speed is decelearated
+          this.unhurtable = 0;          // >0 -> cant run into lines
+          this.r_pressed = false;       // Does player currently press right key?
+          this.l_pressed = false;
+          this.crashed = false;         // Player not crashed yet
+          this.rad = 6;                 // radius of the player for drawing
+          this.trail = [];              // The body of the Player exluding head
+        }
+
+        movement()
+        {
+          if(this.l_pressed)
+          {
+            if(this.inverted>0) this.direction += this.ch_dir/360.0;
+            else this.direction -= this.ch_dir/360.0;
+          }
+          if(this.r_pressed)
+          {
+            if(this.inverted>0) this.direction -= this.ch_dir/360.0;
+            else this.direction += this.ch_dir/360.0;
+          }
+          this.x += Math.cos(this.direction) * this.speed;
+          this.y += Math.sin(this.direction) * this.speed;
+
+          if( this.x<=this.rad || this.x+this.rad>=width ||
+              this.y<=this.rad || this.y+this.rad>=height)
+          {
+            this.crashed = true; // Outside game boundary
+          }
+
+          if(this.inverted>0) this.inverted--;
+          if(this.unhurtable>0) this.unhurtable--;
+
+          if(this.speedy>0)
+          {
+            this.speedy--;
+            this.speed = 7;
+          }
+          else if(this.brake>0)
+          {
+            this.brake--;
+            this.speed = 2;
+          }
+          else this.speed = 4;
+        }
+
+        draw()
+        {
+          ctx.fillStyle = this.color;
+          for(var i=0; i<this.trail.length; i++)
+          {
+            ctx.beginPath();
+            ctx.arc(this.trail[i].x, this.trail[i].y, 6, 0, 2 * Math.PI, false);
+            ctx.fill();
+          }
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.rad, 0, 2 * Math.PI, false);
+          if(this.inverted>0 || this.speedy>0 || this.unhurtable>0 || this.brake>0) ctx.fillStyle = "white";
+          ctx.fill();
+        }
+
+        reset()
+        {
+          this.x = this.start_x;
+          this.y = this.start_y;
+          this.direction = this.start_dir;
+          this.inverted = 0;
+          this.unhurtable = 0;
+          this.trail = [];
+          this.rad = 6;
+          this.speedy = 0;
+          this.brake = 0;
+          this.speed = 4;
+          this.crashed = false;
+        }
+      }
+
+      class Item
+      {
+        constructor(x, y, type)
+        {
+          this.x = x;          // Starting position
+          this.y = y;
+          this.type = type;    // 1 quick, 2 invert, 3 change players, 4 unhurtable, 5 brake, 6 ?
+          this.alpha = 0.0;     // gets slowly visible
+        }
+
+        draw()
+        {
+          ctx.font = "28px Arial";  // For the letter in the item
+          switch(this.type)
+          {
+            case 1: // speed
+              ctx.fillStyle = "rgb(255, 200, 0)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('S', this.x-9, this.y+10);
+              break;
+            case 2: // invert
+              ctx.fillStyle = "rgb(20, 20, 255)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('I', this.x-4, this.y+10);
+              break;
+            case 3:   // change players
+              ctx.fillStyle = "rgb(128, 0, 255)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('C', this.x-10, this.y+10);
+              break;
+            case 4:   // Unhurtable
+              ctx.fillStyle = "rgb(36, 217, 162)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('U', this.x-10, this.y+10);
+              break;
+            case 5:   // Brake
+              ctx.fillStyle = "rgb(231, 117, 17)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('B', this.x-9, this.y+10);
+              break;
+            case 6:   // Mystery
+              ctx.fillStyle = "rgb(255, 255, 255)";
+              ctx.beginPath();
+              ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+              ctx.fill();
+              ctx.fillStyle = "rgb(0, 0, 0)";
+              ctx.fillText('?', this.x-8, this.y+10);
+              break;
+          }
+          if(this.alpha<1) // draw transparent circle over it
+          {
+            ctx.fillStyle = "rgba(0,0,0," + (1-this.alpha).toString() + ")";
+            ctx.arc(this.x, this.y, 17, 0, 2 * Math.PI, false);
+            ctx.fill();
+            this.alpha += 0.03;
+          }
+        }
+      }
+
+      var width = window.innerWidth-50;   // 25 pixel distance on each side
+      var height = window.innerHeight-50; // -5px border -> 20px distance
+      var paused = false;         // True when paused (with RETURN)
+      var stop_timer = 30 * 5;    // 30 FPS -> all 5 seconds stop with trailing
+      var stop_length = 30 * 0.6; // stop trailing for 0.6 seconds
+      var time = 0;               // for calculation if players are trailing
+      var trailing = true;        // True if players roduce trail
+      var items_activated = true; // Items can be in the game or not (switch with "1")
+      var item_list = [];         // There are no items yet
+      var showed_alert = 0;       // show introduction once after three drawings
+      const p1 = new Player(32, height/2, 0, "#CC0330");
+      const p2 = new Player(width-32, height/2, 3.1415926, "#00DD00");
+
+      function main_loop()
+      {
+        if(paused) return;        // Pause and Unpause with RETURN
+        time++;                   // Trailing is based on this counter
+        add_items();              // Randomly add items
+        p1.movement();            // Move Players
+        p2.movement();
+        draw_everything();        //  Draws Background, items, players, score
+        calculate_collisions();   // Collisions with players and items
+
+        if(time==stop_timer && trailing) {trailing=false; time=0;}
+        if(time==stop_length && !trailing) {trailing=true; time=0;}
+        if(trailing) // only produce trail when trailing
+        {
+          p1.trail.push({x:p1.x, y:p1.y});
+          p2.trail.push({x:p2.x, y:p2.y});
+        }
+        else
+        {
+          p1.trail.push({x:-100, y:-100});  // push back values outside of game
+          p2.trail.push({x:-100, y:-100});
+        }
+
+        if(showed_alert<3)
+        {
+          showed_alert++;
+          if(showed_alert!=3) return;
+          alert("Welcome to Curve X! \n \nThis is a simple, local two player game" +
+                " inspired by classics like Curve fever." +
+                " To view the controls and items press Escape. \n \n" +
+                "For questions and comments please contact me at \n" +
+                "CurveX100@gmail.com");
+        }
+      }
+
+      function draw_everything()
+      {
+        ctx.fillStyle = "black";   // draw black board background
+        ctx.fillRect(0, 0, canv.width, canv.height);
+        ctx.font = "36px Arial";  // For the Points
+        ctx.fillStyle = "rgb(116, 3, 28)";  // red
+        ctx.fillText(p1.points, 250, 32);
+        ctx.fillStyle = "rgb(39, 86, 26)";  // green
+        ctx.fillText(p2.points, width-250, 32);
+        ctx.fillStyle = "rgb(100, 100, 100)";  // dark gray
+        ctx.font = "20px Arial";
+        ctx.fillText("Press Esc for Info", 10, 25);
+
+        for(var i=0; i<item_list.length; i++) {item_list[i].draw();}
+        p1.draw();
+        p2.draw();
+      }
+
+      function calculate_collisions()
+      {
+        for(var i=0; i<p1.trail.length; i++) // length of player trails is equal
+        {
+          if(distance(p1.x, p1.y, p1.trail[i].x, p1.trail[i].y)<= p1.rad*2 &&
+                      p1.trail.length-i>10 && // prevents crashing into head of self
+                      p1.unhurtable == 0)
+          {
+            p1.crashed = true;  // P1 crashed into itself
+          }
+          if(distance(p2.x, p2.y, p2.trail[i].x, p2.trail[i].y)<= p2.rad*2 &&
+                      p2.trail.length-i>10 && // prevents crashing into head of self
+                      p2.unhurtable == 0)
+          {
+            p2.crashed = true; // P2 crashed into itself
+          }
+          if(distance(p1.x, p1.y, p2.x, p2.y) < p1.rad*2)
+          {
+            if(p1.unhurtable==0) p1.crashed = true;  // Players ran into each other
+            if(p2.unhurtable==0) p2.crashed = true;
+          }
+
+          if(distance(p1.x, p1.y, p2.trail[i].x, p2.trail[i].y)<=p1.rad*2 && p1.unhurtable==0)
+          {
+            p1.crashed = true;  // P1 crashed into P2
+          }
+          if(distance(p2.x, p2.y, p1.trail[i].x, p1.trail[i].y)<=p2.rad*2 && p2.unhurtable==0)
+          {
+            p2.crashed = true;  // P2 crashed into P1
+          }
+          if(p1.crashed || p2.crashed) i=9999999; // end for loop
+        }
+
+        if(p1.crashed && p2.crashed) // both crashed in same round
+        {
+          reset_players(); // no one gets points
+          document.getElementById("game_canvas").style = "border: 5px solid blue;";
+          return;
+        }
+        if(p1.crashed)
+        {
+          reset_players();
+          p2.points++;
+          document.getElementById("game_canvas").style = "border: 5px solid #00DD00;";
+          return;
+        }
+        if(p2.crashed)
+        {
+          reset_players();
+          p1.points++;
+          document.getElementById("game_canvas").style = "border: 5px solid #CC0330;";
+          return;
+        }
+
+        if(items_activated)
+        {
+          for(var i=0; i<item_list.length; i++)
+          {
+            if(distance(p1.x,p1.y,item_list[i].x,item_list[i].y)<30)
+            {
+              if(item_list[i].type==6) item_list[i].type=Math.floor(Math.random() * 5) + 1;
+              switch(item_list[i].type)
+              {
+                case 1:     // Speed
+                  p2.speedy = 30 * 4;   // 4 seconds
+                  break;
+                case 2:     // Invert
+                  p2.inverted = 30 * 4; // 4 seconds
+                  break;
+                case 3:     // Change Players
+                  var xx = p1.x;
+                  var yy = p1.y;
+                  var dir = p1.direction;
+                  p1.x = p2.x;
+                  p1.y = p2.y;
+                  p1.direction = p2.direction;
+                  p1.unhurtable += 6; // dont run into your new own line
+                  p2.x = xx;
+                  p2.y = yy;
+                  p2.direction = dir;
+                  p2.unhurtable += 6;
+                  break;
+                case 4:     // unhurtable
+                  p1.unhurtable = 30 * 5; // 5 seconds
+                  break;
+                case 5:     // brake
+                  p2.brake = 30 * 6; // 6 seconds
+                  break;
+              }
+              item_list.splice(i, 1); // remove 1 element from pos i
+            }
+            else if(distance(p2.x,p2.y,item_list[i].x,item_list[i].y)<30)
+            {
+              if(item_list[i].type==6) item_list[i].type=Math.floor(Math.random() * 5) + 1;
+              switch(item_list[i].type)
+              {
+                case 1:     // Speed
+                  p1.speedy = 30 * 4;   // 4 seconds
+                  break;
+                case 2:     // Invert
+                  p1.inverted = 30 * 4; // 4 seconds
+                  break;
+                case 3:     // Change Players
+                  var xx = p1.x;
+                  var yy = p1.y;
+                  var dir = p1.direction;
+                  p1.x = p2.x;
+                  p1.y = p2.y;
+                  p1.direction = p2.direction;
+                  p1.unhurtable += 6; // dont run into your new own line
+                  p2.x = xx;
+                  p2.y = yy;
+                  p2.direction = dir;
+                  p2.unhurtable += 6;
+                  break;
+                case 4:     // unhurtable
+                  p2.unhurtable = 30 * 5; // 5 seconds
+                  break;
+                case 5:     // brake
+                  p1.brake = 30 * 6; // 6 seconds
+                  break;
+              }
+              item_list.splice(i, 1); // remove 1 element from pos i
+            }
+          }
+        }
+      }
+
+      function add_items()
+      {
+        if(!items_activated) return;
+        if(Math.floor(Math.random() * 30*13) != 9) return; // add ca. all 13 seconds
+        var type = Math.floor(Math.random() * 6) + 1;     // type [1-6]
+        var counter = 0;
+        do
+        {
+          var xx = Math.floor(Math.random() * (width-60)) + 30;
+          var yy = Math.floor(Math.random() * (height-60)) + 30;
+          counter += 1;   // only try to find a new spot 1000 times
+        } while(item_on_trail(xx, yy) && counter<1000);
+
+        item_new = new Item(xx, yy, type);
+        item_list.push(item_new);
+      }
+
+      function item_on_trail(x, y)
+      {
+        for(var i=0; i<p1.trail.length; i++) // length of player trails
+        {
+          if(distance(x,y,p1.trail[i].x,p1.trail[i].y)<35) return true;
+          if(distance(x,y,p2.trail[i].x,p2.trail[i].y)<35) return true;
+        }
+        return false;
+      }
+
+      function reset_players()
+      {
+        p1.reset();
+        p2.reset();
+        time = 0;
+        item_list = [];
+        trailing = true;
+      }
+
+      function distance(p1x, p1y, p2x, p2y)
+      {
+        return Math.sqrt((p1x-p2x)*(p1x-p2x)+(p1y-p2y)*(p1y-p2y));
+      }
+
+      function keyDownHandler(evt)
+      {
+        switch(evt.keyCode)
+        {
+          case 37:        // Left Arrow
+            p2.l_pressed = true;
+            break;
+          case 39:        // Right Arrow
+            p2.r_pressed = true;
+            break;
+          case 65:        // A Key
+            p1.l_pressed = true;
+            break;
+          case 83:        // S Key
+            p1.r_pressed = true;
+            break;
+          case 13:        // Return Key
+            paused = !paused;
+            break;
+          case 49:        // "1" Key
+            items_activated = !items_activated;
+            item_list = [];
+            break;
+          case 27:      // Escape Key
+            alert("Movement\n------------\nPlayer 1: \t \tA, S\nPlayer 2: \t \t←, →\n" +
+                  "Pause: \t \t \t ↲\nItems (on/off): \t 1" +
+                  "\n\n\nItems\n------------\nS\tSpeed\nI\tInvert movement\nC\t" +
+                  "Change positions\nU\tUnbreakable\nB\tBreak\n?\tMystery");
+            break;
+        }
+      }
+
+      function keyUpHandler(evt)
+      {
+        switch(evt.keyCode)
+        {
+          case 37:        // Left Arrow
+            p2.l_pressed = false;
+            break;
+          case 39:        // Right Arrow
+            p2.r_pressed = false;
+            break;
+          case 65:        // A Key
+            p1.l_pressed = false;
+            break;
+          case 83:        // S Key
+            p1.r_pressed = false;
+            break;
+        }
+      }
+
+    </script>
+  </body>
+</html>
